@@ -4,6 +4,7 @@ import argparse
 from lib.search_utils import BM25_K1, BM25_B, DEFAULT_SEARCH_LIMIT
 
 from lib.keyword_search import build_command, search_command, tf_command, idf_command, tfidf_command, bm25_idf_command, bm25_tf_command, bm25_search_command
+from lib.semantic_search import verify_model, embed_text, verify_embeddings, embed_query_text, semantic_search_command
 
 
 def main() -> None:
@@ -36,9 +37,30 @@ def main() -> None:
     bm25search_parser = subparsers.add_parser("bm25search", help="Search movies using full BM25 scoring")
     bm25search_parser.add_argument("query", type=str, help="Search query")
 
+    subparsers.add_parser("verify_model", help="Verify the semantic search model")
+
+    add_vector_parser = subparsers.add_parser("add_vector", help="Add two vectors")
+    add_vector_parser.add_argument("vec1", type=list, help="First vector")
+    add_vector_parser.add_argument("vec2", type=list, help="Second vector")
+
+    subtract_vector_parser = subparsers.add_parser("subtract_vector", help="Subtract two vectors")
+    subtract_vector_parser.add_argument("vec1", type=list, help="First vector")
+    subtract_vector_parser.add_argument("vec2", type=list, help="Second vector")
 
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
+
+    embed_text_parser = subparsers.add_parser("embed_text", help="Embed text")
+    embed_text_parser.add_argument("text", type=str, help="Text to embed")
+
+    subparsers.add_parser("verify_embeddings", help="Verify embeddings")
+
+    embed_query_parser = subparsers.add_parser("embedquery", help="Embed query text")
+    embed_query_parser.add_argument("query", type=str, help="Query to embed")
+
+    search_parser = subparsers.add_parser("semantic_search", help="Search movies using semantic search")
+    search_parser.add_argument("query", type=str, help="Search query")
+    search_parser.add_argument("limit", type=int, nargs='?', default=DEFAULT_SEARCH_LIMIT, help="Limit the number of results")
 
     args = parser.parse_args()
 
@@ -69,6 +91,18 @@ def main() -> None:
             print(f"BM25 TF score for '{args.term}' in document {args.doc_id}: {bm25tf:.2f}")
         case "bm25search":
             bm25_search_command(args.query, DEFAULT_SEARCH_LIMIT, BM25_K1, BM25_B)
+        case "verify_model":
+            verify_model()
+        case "embed_text":
+            embed_text(args.text)
+        case "verify_embeddings":
+            verify_embeddings()
+        case "embedquery":
+            embed_query_text(args.query)
+        case "semantic_search":
+            results = semantic_search_command(args.query, args.limit)
+            for i, res in enumerate(results, 1):
+                print(f"{i}. {res['title']} - {res['score']:.2f}")
         case _:
             parser.print_help()
 
