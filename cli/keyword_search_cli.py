@@ -1,60 +1,54 @@
 #!/usr/bin/env python3
 
 import argparse
-from json import load
-import string
-from nltk.stem import PorterStemmer
-from inverted_index import InvertedIndex
 
-def clean_text(text):
-    table = str.maketrans("", "", string.punctuation)
-    return text.lower().translate(table)
+from lib.keyword_search import build_command, search_command, tf_command, idf_command, tfidf_command
 
-def tokenize(text):
-    stemmer = PorterStemmer()
-    stop_words = [line.strip() for line in open("data/stopwords.txt")]
-    return [stemmer.stem(word) for word in clean_text(text).split(" ") if word not in stop_words]
-
-def search_movies(query: str):
-    movies = load(open("data/movies.json"))
-
-    query = tokenize(query)
-    matching = []
-    for movie in movies["movies"]:
-        title = tokenize(movie["title"])
-        
-        if any(any(word in t for t in title) for word in query):
-            matching.append(movie)
-
-    sorted_movies = sorted(matching, key=lambda m: m["id"])[:5]
-    results = [movie["title"] for movie in sorted_movies]
-    print(results)
-    return results
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    subparsers.add_parser("build", help="Build the inverted index")
+    tf_parser = subparsers.add_parser("tf", help="Calculate term frequency")
+    tf_parser.add_argument("docId", type=int, help="Document ID")
+    tf_parser.add_argument("term", type=str, help="Term")
+
+    idf_parser = subparsers.add_parser("idf", help="Calculate inverse document frequency")
+    idf_parser.add_argument("term", type=str, help="Term")
+
+    tfidf_parser = subparsers.add_parser("tfidf", help="Calculate TF-IDF")
+    tfidf_parser.add_argument("docId", type=int, help="Document ID")
+    tfidf_parser.add_argument("term", type=str, help="Term")
+
+
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
-
-    subparsers.add_parser("build", help="Build the inverted index")
 
     args = parser.parse_args()
 
     match args.command:
-        case "search":
-            results = search_movies(args.query)
-            for result in results:
-                print(result)
         case "build":
-            index = InvertedIndex()
-            index.build()
-            index.save()
-            first_id = index.get_documents("merida")[0]
-            print(f"Index built and saved. First document for 'merida': {first_id}")
+            print("Building inverted index...")
+            build_command()
+            print("Inverted index built successfully.")
+        case "search":
+            print("Searching for:", args.query)
+            results = search_command(args.query)
+            for i, res in enumerate(results, 1):
+                print(f"{i}. ({res['id']}) {res['title']}")
+        case "tf":
+            result = tf_command(args.docId, args.term)
+            print(result)
+        case "idf":
+            idf = idf_command(args.term)
+            print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
+        case "tfidf":
+            tfidf = tfidf_command(args.docId, args.term)
+            print(f"TF-IDF of '{args.term}' in document {args.docId}: {tfidf:.2f}")
         case _:
             parser.print_help()
+
 
 if __name__ == "__main__":
     main()
