@@ -4,6 +4,7 @@ from typing import Any
 from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
 from .search_utils import normalize_scores, load_movies, BM25_K1, BM25_B
+from .llm import generate_content, system_prompt
 
 
 def hybrid_score(semantic_score, bm25_score, alpha):
@@ -89,10 +90,13 @@ class HybridSearch:
         
         return results[:limit]
 
-    def rrf_search(self, query, k, limit=10):
+    def rrf_search(self, query, k, limit=10, enhance=None):
         expanded_limit = limit * 500
-        bm25_results = self._bm25_search(query, expanded_limit)
-        semantic_results = self.semantic_search.search_chunks(query, expanded_limit)
+        final_query = generate_content(model="gemini-2.5-flash", contents=query, system_instruction=system_prompt(enhance, query) if enhance else query)
+        print(f"Enhanced query ({enhance}): '{query}' -> '{final_query}'\n")
+
+        bm25_results = self._bm25_search(final_query, expanded_limit)
+        semantic_results = self.semantic_search.search_chunks(final_query, expanded_limit)
         
         # Build map of doc_id -> bm25_rank (1-indexed)
         bm25_rank_map = {}
@@ -144,7 +148,7 @@ def weighted_search_command(query, alpha, limit):
     hybrid_search = HybridSearch(documents)
     return hybrid_search.weighted_search(query, alpha, limit)
 
-def rrf_search_command(query, k, limit):
+def rrf_search_command(query, k, limit, enhance=None):
     documents = load_movies()
     hybrid_search = HybridSearch(documents)
-    return hybrid_search.rrf_search(query, k, limit)
+    return hybrid_search.rrf_search(query, k, limit, enhance)

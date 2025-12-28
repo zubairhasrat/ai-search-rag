@@ -11,3 +11,4 @@ wheels/
 data/
 cache/
 uv.lock
+.env
