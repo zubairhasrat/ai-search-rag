@@ -12,8 +12,6 @@ from .search_utils import (
     load_movies,
     load_stopwords,
 )
-
-
 class InvertedIndex:
     def __init__(self) -> None:
         self.index = defaultdict(set)

@@ -79,3 +79,17 @@ def semantic_chunk(text, max_chunk_size = 4, overlap = 0):
         if stripped_sentences:
             chunks.append(" ".join(stripped_sentences))
     return chunks
+
+def normalize_scores(scores):
+    if len(scores) == 0:
+        return []
+  
+    # Normalization formula: (score - min_score) / (max_score - min_score)
+    min_score = min(scores)
+    max_score = max(scores)
+
+    normalized_scores = []
+    for score in scores:
+        score = (score - min_score) / (max_score - min_score)
+        normalized_scores.append(score)
+    return normalized_scores
