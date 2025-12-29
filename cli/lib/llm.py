@@ -2,6 +2,9 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from time import sleep
+import json
+from sentence_transformers import CrossEncoder
 
 load_dotenv()
 
@@ -16,7 +19,8 @@ def generate_content(model: str, contents: str, system_instruction: str) -> str:
     contents=contents,
     config=types.GenerateContentConfig(
       response_mime_type="text/plain",
-      system_instruction=system_instruction
+      system_instruction=system_instruction,
+      stopSequences=["```json", "```"],
     )
   )
   return response.text
@@ -30,6 +34,30 @@ def system_prompt(enhance: str, query: str) -> str:
     return expand_query_prompt(query)
   else:
     return query
+
+def llm_rerank_cross_encoder(query: str, docs: list) -> dict:
+  cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+  pairs = []
+  for doc in docs:
+    pairs.append([query, f"{doc.get('title', '')} - {doc.get('description', '')}"])
+  scores = cross_encoder.predict(pairs)
+  return {docs[i]["id"]: float(scores[i]) for i in range(len(docs))}
+
+def llm_rerank_individual(query: str, docs: list) -> dict:
+  llm_score = {}
+  for doc in docs:
+    movie_info = f"{doc.get('title', '')} - {doc.get('description', '')}"
+    response = generate_content(model="gemini-2.5-flash", contents=movie_info, system_instruction=rerank_query_prompt(query, doc))
+    llm_score[doc["id"]] = float(response.strip())
+    sleep(3)
+  return llm_score
+
+def llm_rerank_batch(query: str, docs: list) -> list:
+  doc_list_str = "\n".join([f"{doc['id']}: {doc['title']} - {doc['description']}" for doc in docs])
+  response = generate_content(model="gemini-2.5-flash", contents=doc_list_str, system_instruction=rerank_batch_prompt(query, doc_list_str))
+  # Clean up response - strip markdown code blocks if present
+  cleaned = response.strip()
+  return json.loads(cleaned)
 
 def spell_enhancement_prompt(query: str) -> str:
   return f"""
@@ -76,4 +104,33 @@ def expand_query_prompt(query: str) -> str:
   - "comedy with bear" -> "comedy funny bear humor lighthearted"
 
   Query: "{query}"
+  """
+
+def rerank_query_prompt(query: str, doc: dict) -> str:
+  return f"""Rate how well this movie matches the search query.
+
+  Query: "{query}"
+  Movie: {doc.get("title", "")} - {doc.get("description", "")}
+
+  Consider:
+  - Direct relevance to query
+  - User intent (what they're looking for)
+  - Content appropriateness
+
+  Rate 0-10 (10 = perfect match).
+  Give me ONLY the number in your response, no other text or explanation.
+
+  Score:"""
+
+def rerank_batch_prompt(query: str, doc_list_str: str) -> str:
+  return f"""Rank these movies by relevance to the search query.
+
+  Query: "{query}"
+
+  Movies:
+  {doc_list_str}
+
+  Return ONLY the IDs in order of relevance (best match first). Return a valid JSON list, nothing else. For example:
+
+  [75, 12, 34, 2, 1]
   """

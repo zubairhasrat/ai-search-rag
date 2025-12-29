@@ -18,6 +18,7 @@ def main() -> None:
     rrf_search_parser.add_argument("-k", type=int, default=60, help="k parameter for RRF (default: 60)")
     rrf_search_parser.add_argument("--limit", type=int, default=5, help="Number of results to return (default: 5)")
     rrf_search_parser.add_argument("--enhance",type=str, choices=["spell", "rewrite", "expand"], help="Query enhancement method")
+    rrf_search_parser.add_argument("--rerank_method", type=str, choices=["individual", "batch", "cross_encoder"], help="Rerank method")
 
     args = parser.parse_args()
 
@@ -34,9 +35,18 @@ def main() -> None:
                 print(f"   BM25: {res['bm25_score']:.3f}, Semantic: {res['semantic_score']:.3f}")
                 print(f"   {res['description']}...")
         case "rrf_search":
-            results = rrf_search_command(args.query, args.k, args.limit)
+            results = rrf_search_command(args.query, args.k, args.limit, args.enhance, args.rerank_method)
+            if args.rerank_method in ["individual", "batch", "cross_encoder"]:
+                print(f"Reranking top {args.limit} results using {args.rerank_method} method...\n")
+            print(f"Reciprocal Rank Fusion Results for '{args.query}' (k={args.k}):")
             for i, res in enumerate(results, 1):
                 print(f"{i}. {res['title']}")
+                if args.rerank_method == "individual":
+                    print(f"   Rerank Score: {res['llm_score']:.3f}/10")
+                elif args.rerank_method == "batch":
+                    print(f"   Rerank Rank: {res['rerank_rank']}")
+                elif args.rerank_method == "cross_encoder":
+                    print(f"   Cross Encoder Score: {res['cross_encoder_score']:.3f}")
                 print(f"   RRF Score: {res['rrf_score']:.3f}")
                 print(f"   BM25 Rank: {res['bm25_rank']}, Semantic Rank: {res['semantic_rank']}")
                 print(f"   {res['description']}...")

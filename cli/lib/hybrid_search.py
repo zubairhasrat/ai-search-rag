@@ -1,10 +1,10 @@
 import os
 from typing import Any
-
+import json
 from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
 from .search_utils import normalize_scores, load_movies, BM25_K1, BM25_B
-from .llm import generate_content, system_prompt
+from .llm import generate_content, system_prompt, llm_rerank_individual, llm_rerank_batch, llm_rerank_cross_encoder
 
 
 def hybrid_score(semantic_score, bm25_score, alpha):
@@ -13,6 +13,9 @@ def hybrid_score(semantic_score, bm25_score, alpha):
 
 def rrf_score(rank, k=60):
     return 1 / (k + rank)
+
+def llm_rerank(query: str, doc: dict) -> float:
+  return llm_rerank_individual(query, doc)
 
 class HybridSearch:
     def __init__(self, documents):
@@ -90,10 +93,14 @@ class HybridSearch:
         
         return results[:limit]
 
-    def rrf_search(self, query, k, limit=10, enhance=None):
-        expanded_limit = limit * 500
-        final_query = generate_content(model="gemini-2.5-flash", contents=query, system_instruction=system_prompt(enhance, query) if enhance else query)
-        print(f"Enhanced query ({enhance}): '{query}' -> '{final_query}'\n")
+    def rrf_search(self, query, k, limit=10, enhance=None, rerank_method=None):
+        expanded_limit = limit * 5 if rerank_method is not None else limit * 500
+        
+        if enhance:
+            final_query = generate_content(model="gemini-2.5-flash", contents=query, system_instruction=system_prompt(enhance, query))
+            print(f"Enhanced query ({enhance}): '{query}' -> '{final_query}'\n")
+        else:
+            final_query = query
 
         bm25_results = self._bm25_search(final_query, expanded_limit)
         semantic_results = self.semantic_search.search_chunks(final_query, expanded_limit)
@@ -133,11 +140,28 @@ class HybridSearch:
             "rrf_score": combined_rrf,
             "bm25_rank": bm25_rank,
             "semantic_rank": semantic_rank,
+            "llm_score": 0,
           })
-        
-        results.sort(key=lambda x: x["rrf_score"], reverse=True)
-        return results[:limit]
 
+        if rerank_method == "individual":
+          llm_scores = llm_rerank_individual(final_query, results)
+          for result in results:
+            result["llm_score"] = llm_scores[result["id"]]
+          results.sort(key=lambda x: x["llm_score"], reverse=True)
+        elif rerank_method == "batch":
+          llm_ranked_ids = llm_rerank_batch(final_query, results)
+          id_to_rank = {doc_id: rank + 1 for rank, doc_id in enumerate(llm_ranked_ids)}
+          for result in results:
+            result["rerank_rank"] = id_to_rank.get(result["id"], len(llm_ranked_ids) + 1)
+          results.sort(key=lambda x: x["rerank_rank"])
+        elif rerank_method == "cross_encoder":
+          cross_encoder_scores = llm_rerank_cross_encoder(final_query, results)
+          for result in results:
+            result["cross_encoder_score"] = cross_encoder_scores[result["id"]]
+          results.sort(key=lambda x: x["cross_encoder_score"], reverse=True)
+        else:
+          results.sort(key=lambda x: x["rrf_score"], reverse=True)
+        return results[:limit]
 
 def normalize_command(scores):
     return normalize_scores(scores)
@@ -148,7 +172,7 @@ def weighted_search_command(query, alpha, limit):
     hybrid_search = HybridSearch(documents)
     return hybrid_search.weighted_search(query, alpha, limit)
 
-def rrf_search_command(query, k, limit, enhance=None):
+def rrf_search_command(query, k, limit, enhance=None, rerank_method=None):
     documents = load_movies()
     hybrid_search = HybridSearch(documents)
-    return hybrid_search.rrf_search(query, k, limit, enhance)
+    return hybrid_search.rrf_search(query, k, limit, enhance, rerank_method)
