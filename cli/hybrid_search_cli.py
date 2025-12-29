@@ -1,5 +1,5 @@
 import argparse
-from lib.hybrid_search import normalize_command, weighted_search_command, rrf_search_command
+from lib.hybrid_search import normalize_command, weighted_search_command, rrf_search_command, evaluate_rrf_command
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Hybrid Search CLI")
@@ -19,6 +19,7 @@ def main() -> None:
     rrf_search_parser.add_argument("--limit", type=int, default=5, help="Number of results to return (default: 5)")
     rrf_search_parser.add_argument("--enhance",type=str, choices=["spell", "rewrite", "expand"], help="Query enhancement method")
     rrf_search_parser.add_argument("--rerank_method", type=str, choices=["individual", "batch", "cross_encoder"], help="Rerank method")
+    rrf_search_parser.add_argument("--evaluate", action="store_true", help="Evaluate the search results")
 
     args = parser.parse_args()
 
@@ -50,6 +51,12 @@ def main() -> None:
                 print(f"   RRF Score: {res['rrf_score']:.3f}")
                 print(f"   BM25 Rank: {res['bm25_rank']}, Semantic Rank: {res['semantic_rank']}")
                 print(f"   {res['description']}...")
+            
+            if args.evaluate:
+                eval_scores = evaluate_rrf_command(results, args.query)
+                print(f"\nEvaluation Report:")
+                for i, (res, score) in enumerate(zip(results, eval_scores), 1):
+                    print(f"{i}. {res['title']}: {score}/3")
         case _:
             parser.print_help()
 

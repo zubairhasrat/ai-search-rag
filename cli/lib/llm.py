@@ -35,6 +35,17 @@ def system_prompt(enhance: str, query: str) -> str:
   else:
     return query
 
+def evaluate_rrf(search_results: list, query: str) -> list:
+  formatted_results = [f"{i+1}. {doc['title']} - {doc['description']}" for i, doc in enumerate(search_results)]
+  contents = "\n".join(formatted_results)
+  response = generate_content(
+    model="gemini-2.5-flash", 
+    contents=contents, 
+    system_instruction=evaluate_rrf_prompt(query, formatted_results)
+  )
+  return json.loads(response.strip())
+
+
 def llm_rerank_cross_encoder(query: str, docs: list) -> dict:
   cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
   pairs = []
@@ -134,3 +145,23 @@ def rerank_batch_prompt(query: str, doc_list_str: str) -> str:
 
   [75, 12, 34, 2, 1]
   """
+
+def evaluate_rrf_prompt(query: str, formatted_results: list) -> str:
+  return f"""Rate how relevant each result is to this query on a 0-3 scale:
+
+Query: "{query}"
+
+Results:
+{chr(10).join(formatted_results)}
+
+Scale:
+- 3: Highly relevant
+- 2: Relevant
+- 1: Marginally relevant
+- 0: Not relevant
+
+Do NOT give any numbers other than 0, 1, 2, or 3.
+
+Return ONLY the scores in the same order you were given the documents. Return a valid JSON list, nothing else. For example:
+
+[2, 0, 3, 2, 0, 1]"""
