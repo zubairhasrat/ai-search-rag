@@ -13,16 +13,15 @@ print(f"Using key {api_key[:6]}...")
 
 client = genai.Client(api_key=api_key)
 
-def generate_content(model: str, contents: str, system_instruction: str) -> str:
-  response =client.models.generate_content(
-    model=model,
-    contents=contents,
-    config=types.GenerateContentConfig(
-      response_mime_type="text/plain",
-      system_instruction=system_instruction,
-      stopSequences=["```json", "```"],
-    )
+def generate_content(model: str, contents: str, system_instruction: str = None) -> str:
+  config = types.GenerateContentConfig(
+    response_mime_type="text/plain",
+    stopSequences=["```json", "```"],
   )
+  if system_instruction:
+    config.system_instruction = system_instruction
+  
+  response = client.models.generate_content(model=model, contents=contents, config=config)
   return response.text
 
 def system_prompt(enhance: str, query: str) -> str:
@@ -69,6 +68,7 @@ def llm_rerank_batch(query: str, docs: list) -> list:
   # Clean up response - strip markdown code blocks if present
   cleaned = response.strip()
   return json.loads(cleaned)
+
 
 def spell_enhancement_prompt(query: str) -> str:
   return f"""
