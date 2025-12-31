@@ -13,7 +13,7 @@ print(f"Using key {api_key[:6]}...")
 
 client = genai.Client(api_key=api_key)
 
-def generate_content(model: str, contents: str, system_instruction: str = None) -> str:
+def generate_content(model: str, contents: str = None, system_instruction: str = None, parts: list = None) -> str:
   config = types.GenerateContentConfig(
     response_mime_type="text/plain",
     stopSequences=["```json", "```"],
@@ -21,7 +21,7 @@ def generate_content(model: str, contents: str, system_instruction: str = None) 
   if system_instruction:
     config.system_instruction = system_instruction
   
-  response = client.models.generate_content(model=model, contents=contents, config=config)
+  response = client.models.generate_content(model=model, contents=contents, parts=parts, config=config)
   return response.text
 
 def system_prompt(enhance: str, query: str) -> str:
